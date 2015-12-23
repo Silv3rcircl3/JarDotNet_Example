@@ -1,4 +1,5 @@
-﻿using System;
+using System;
+using System.Linq;
 using Akka.Actor;
 using Example.Messages;
 
@@ -18,7 +19,8 @@ namespace Example
             Receive<Step3Item>(item =>
             {
                 //Make some calculations here
-                Sender.Tell(new Step4Item(item.Value + 1));
+                var total = item.Items.Sum(x => x);
+                Sender.Tell(new Step4Item(item.Value + 1 + total));
             });
         }
     }
