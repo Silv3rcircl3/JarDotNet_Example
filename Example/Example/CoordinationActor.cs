@@ -7,7 +7,8 @@ namespace Example
 {
     class CoordinationActor : ReceiveActor
     {
-        private readonly List<Step4Item> _step3Results = new List<Step4Item>();
+        private readonly HashSet<Step2Item> _step1Results = new HashSet<Step2Item>();
+        private readonly HashSet<Step4Item> _step2Results = new HashSet<Step4Item>();
         private readonly IActorRef _calculationActor;
         private IActorRef _originalSender;
 
@@ -33,50 +34,47 @@ namespace Example
                 var result = message as Step2Item;
                 if (result != null)
                 {
-                    _calculationActor.Tell(new Step3Item(result.Value));
+                    _step1Results.Add(result);
                     return true;
                 }
 
                 var finished = message as Finished;
                 if (finished != null)
                 {
-                    Become(ProcessingStep3);
-                    _calculationActor.Tell(new Finished());
+                    Become(ProcessingStep2(count));
                 }
 
                 return false;
             };
         }
 
-        private void ProcessingStep3()
+        private Receive ProcessingStep2(int count)
         {
-            int lowest = -1;
-            int highest = -1;
+            var repositoryResults = Repository.Fetch(_step1Results.Select(s => s.Value).ToList());
 
-            Receive<Step4Item>(item =>
+            for (int i = 0; i < count; i++)
+                _calculationActor.Tell(new Step3Item(i, repositoryResults));
+            _calculationActor.Tell(new Finished());
+
+            return message =>
             {
-                //make some calculations here based on the incoming messages 
-                if (lowest == -1 && highest == -1)
+                var result = message as Step4Item;
+                if (result != null)
                 {
-                    lowest = item.Value;
-                    highest = item.Value;
+                    _step2Results.Add(result);
+                    return true;
                 }
-                else
+
+                var finished = message as Finished;
+                if (finished != null)
                 {
-                    if (lowest > item.Value)
-                        lowest = item.Value;
-                    else if (highest < item.Value)
-                        highest = item.Value;
+                    int lowest = repositoryResults.Min(x => x);
+                    int highest = repositoryResults.Max(x => x);
+                    _originalSender.Tell(new Result(repositoryResults, lowest, highest));
                 }
-                
-                _step3Results.Add(item);
-                
-            });
-            Receive<Finished>(_ =>
-            {
-                var repositoryResults = Repository.Fetch(_step3Results.Select(s => s.Value).ToList());
-                _originalSender.Tell(new Result(repositoryResults, lowest, highest));
-            });
+
+                return false;
+            };
         }
     }
 }
